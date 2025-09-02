@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum EventType {
+  VIEW
+  NEXT
+  PREV
+  CLICK
+  COMPLETE
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(USER)
+  tours        Tour[]
+  refreshTokens RefreshToken[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Tour {
+  id             String      @id @default(cuid())
+  title          String
+  description    String? 
+  coverImageUrl  String?
+  isPublic       Boolean     @default(false)
+  shareId        String?     @unique
+  owner          User        @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  ownerId        String
+  steps          Step[]      @relation("TourSteps")
+  events         AnalyticsEvent[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([ownerId])
+}
+
+model Step {
+  id          String   @id @default(cuid())
+  order       Int
+  imageUrl    String?
+  videoUrl    String?
+  annotation  String?         // rich text or markdown
+  hotspot     Json?           // {x,y,width,height} or array of hotspots
+  tour        Tour     @relation("TourSteps", fields: [tourId], references: [id], onDelete: Cascade)
+  tourId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tourId])
+  @@unique([tourId, order])   // stable ordering per tour
+  AnalyticsEvent AnalyticsEvent[]
+}
+
+model AnalyticsEvent {
+  id        String    @id @default(cuid())
+  tour      Tour      @relation(fields: [tourId], references: [id], onDelete: Cascade)
+  tourId    String
+  step      Step?     @relation(fields: [stepId], references: [id])
+  stepId    String?
+  type      EventType
+  referrer  String?
+  sessionId String?         // for grouping
+  ipHash    String?         // anonymized
+  createdAt DateTime  @default(now())
+
+  @@index([tourId])
+  @@index([stepId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
