@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 const router: Router = express.Router();
 import { z } from 'zod';
+import { randomBytes } from 'crypto';
 
 const tourDataSchema = z.object({
   title: z.string(),
@@ -19,7 +20,7 @@ type TourData = z.infer<typeof tourDataSchema>;
 router.get("/", auth, async (req: any, res) => {
   try {
     const tours = await prisma.tour.findMany({ 
-    where: { 
+    where: {
         ownerId: req.user.sub 
     }, 
     include: { 
@@ -40,7 +41,7 @@ router.get("/", auth, async (req: any, res) => {
 router.post("/create", auth, async (req: any, res) => {
   try {
     const body = req.body;
-    const parseResult = tourDataSchema.safeParse(body);
+    const parseResult = tourDataSchema.safeParse(body); 
     if (!parseResult.success) {
       return res.status(400).json({ 
         error: "Invalid tour data", 
@@ -63,6 +64,7 @@ router.post("/create", auth, async (req: any, res) => {
 });
 
 router.get("/:id", auth, requireOwner(r => r.params.id), async (req, res) => {
+  console.log("i am in get tour by id");
   try {
     const tour = await prisma.tour.findUnique({ 
       where: { id: req.params.id },
@@ -115,6 +117,98 @@ router.delete("/:id", auth, requireOwner(r => r.params.id), async (req, res) => 
     } catch (error) {
         res.status(500).json({ error: "Internal server error" });
     }
+});
+
+export const stepDataSchema = z.object({
+  imageUrl: z.string().optional(),
+  videoUrl: z.string().optional(),
+  annotation: z.string().optional(),
+  order: z.number().optional(),
+  hotspot: z.string().optional(),
+});
+
+export type StepData = z.infer<typeof stepDataSchema>;
+
+router.post("/api/tours/:id/steps", auth, requireOwner(r => r.params.id), async (req, res) => {
+  try {
+    const body = req.body;
+    const parseResult = stepDataSchema.safeParse(body);
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: "Invalid step data",
+        details: parseResult.error.issues
+      });
+  }
+  const step = await prisma.step.create({
+    data: {
+      tourId: req.params.id,
+      imageUrl: body.imageUrl,
+      videoUrl: body.videoUrl,
+      annotation: body.annotation,
+      order: body.order ?? 0,
+      hotspot: body.hotspot ?? ""
+    },
+  });
+  res.status(201).json(step);
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/:id/publish", auth, requireOwner(r => r.params.id), async (req, res) => {
+  try{
+    const shareId = randomBytes(8).toString("hex");
+    const tour = await prisma.tour.update({
+      where: { 
+        id: req.params.id 
+      },
+      data: {
+        isPublic: true, 
+        shareId 
+      } 
+    });
+
+    res.status(200).json({ 
+      shareId: tour.shareId 
+    });
+  }catch(e){
+    res.status(500).json({
+      error: "Internal server error"
+    })
+  }
+});
+
+router.post("/:id/unpublish", auth, requireOwner(r => r.params.id), async (req, res) => {
+  try{
+    await prisma.tour.update({
+    where: {
+      id: req.params.id
+    },
+    data: {
+      isPublic: false,
+      shareId: null
+    }
+  });
+  res.status(204).end();
+  }catch(e){
+    res.status(500).json({
+      error: "Internal server error"
+    })
+  }
+});
+
+router.get("/:id/analytics", auth, requireOwner(r => r.params.id), async (req, res) => {
+  try{
+     const [views, completes] = await Promise.all([
+    prisma.analyticsEvent.count({ where: { tourId: req.params.id, type: 'VIEW' } }),
+    prisma.analyticsEvent.count({ where: { tourId: req.params.id, type: 'COMPLETE' } }),
+    ]);
+    res.json({ views, completes });
+  }catch(e){
+    res.status(500).json({
+      error : "Internal server error"
+    })
+  }
 });
 
 export default router;
