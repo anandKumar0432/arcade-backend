@@ -1,8 +1,8 @@
 import express, { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
-import { auth } from '../middleware.js';
-import { requireOwner } from '../middleware.js';
+import { auth } from '../middleware/middleware.js';
+import { requireOwner } from '../middleware/middleware.js';
 import dotenv from 'dotenv';
 dotenv.config();
 const router: Router = express.Router();

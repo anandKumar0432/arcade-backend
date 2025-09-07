@@ -5,8 +5,9 @@ import { z } from 'zod';
 dotenv.config();
 const router: Router = express.Router();
 import { PrismaClient } from '@prisma/client';
-import { signAccess } from '../middleware.js';
-import { auth } from '../middleware.js';
+import { requireOwner, signAccess } from '../middleware/middleware.js';
+import { auth } from '../middleware/middleware.js';
+import upload from '../middleware/upload.js';
 const prisma = new PrismaClient();
 
 const signUpSchema = z.object({
@@ -106,6 +107,33 @@ router.get("/me", auth, async (req: any, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// upload file at the apps 
+// router.post("/upload/:tourId", auth, requireOwner(r => r.params.tourId), upload.single('file'), async (req: any, res: express.Response) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ message: "No file uploaded" });
+//     }
+//     await prisma.tour.update({
+//       where: { id: req.params.tourId },
+//       data: { coverImageUrl: req.file.path }
+//     });
+//     res.json({ message: "File uploaded successfully", file: req.file });
+//   } catch (error) {
+//     return res.status(500).json({ message: "Internal server error" });
+//   }
+// });
+// for testing purpose
+router.post("/upload", upload.single('file'), async (req: any, res: express.Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+    res.json({ message: "File uploaded successfully", file: req.file });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 
